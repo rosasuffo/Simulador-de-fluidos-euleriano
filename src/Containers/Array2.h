@@ -17,17 +17,11 @@ public:
     Array2(const uint sx, const uint sy)
         : ptr(nullptr){resize(Index2(sx, sy))}
 
-        Array2(const Index2 &size)
-        : ptr(nullptr)
-    {
-        resize(size);
-    }
+    Array2(const Index2 &size)
+        : ptr(nullptr){resize(size);}
 
     Array2(const Array2<T> &array)
-        : ptr(nullptr)
-    {
-        copy(array);
-    }
+        : ptr(nullptr){copy(array);}
 
     ~Array2()
     {

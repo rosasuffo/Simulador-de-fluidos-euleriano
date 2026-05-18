@@ -37,7 +37,7 @@ public:
     {
         fluidEmission();
         fluidAdvection(dt);
-        //fluidVolumeForces(dt);
+        fluidVolumeForces(dt);
         fluidViscosity(dt);
         fluidPressureProjection(dt);
     }
