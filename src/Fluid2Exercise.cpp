@@ -46,6 +46,15 @@ float bilinearInt_float(Array2<float> values, Vector2 idx)
     float q1 = f_x0y1 * (1.f - deltaX) + f_x1y1 * deltaX;
     return q0 * (1.f - deltaY) + q1 * deltaY;
 }
+
+float check(Index2 &a, Array2<float> &b)
+{
+    Index2 sz = b.getSize();
+    if (a.x >= 0 && a.x < sz.x && a.y >= 0 && a.y < sz.y)
+        return b[a];
+    else
+        return 0.0f;
+}
 ////////////////////////////////////////////////
 // Add any reusable classes or functions HERE //
 ////////////////////////////////////////////////
@@ -55,6 +64,188 @@ float bilinearInt_float(Array2<float> values, Vector2 idx)
 // advection
 void Fluid2::fluidAdvection(const float dt)
 {
+    /* Index2 gridSize = grid.getSize();
+    AABox2 box = grid.getDomain();
+    Vector2 dmin = box.minPosition;
+    Vector2 dmax = box.maxPosition;
+
+    // ink advection
+    {
+        Array2<Vector3> ink2 = this->inkRGB;
+        const Index2 &Inksize = ink2.getSize();
+        for (int i = 0; i < gridSize.x; i++) {
+            for (int j = 0; j < gridSize.y; j++) {
+                Index2 point(i, j);
+                Index2 pointX = Index2(i + 1, j);
+                Index2 pointY = Index2(i, j + 1);
+
+                float velx = (velocityX[point] + velocityX[pointX]) * 0.5f;
+                float vely = (velocityY[point] + velocityY[pointY]) * 0.5f;
+                Vector2 v(velx, vely);
+
+                Vector2 pointBef = grid.getCellPos(point) - dt * v;
+
+                if (pointBef.x < dmin.x)
+                    pointBef.x = dmin.x;
+                else if (pointBef.x > dmax.x)
+                    pointBef.x = dmax.x;
+
+                Vector2 pointBefIndex = grid.getCellIndex(pointBef);
+
+                Vector2 min = Vector2(floor(pointBefIndex.x), floor(pointBefIndex.y));
+                Index2 minID(min.x, min.y);
+                Vector2 max = Vector2(ceil(pointBefIndex.x), ceil(pointBefIndex.y));
+                Index2 maxID(max.x, max.y);
+
+                int minX = clamp(minID.x, 0, Inksize.x - 1);
+                int maxX = clamp(maxID.x, 0, Inksize.x - 1);
+                int minY = clamp(minID.y, 0, Inksize.y - 1);
+                int maxY = clamp(maxID.y, 0, Inksize.y - 1);
+
+                Index2 p1 = Index2(minX, minY);
+                Index2 p2 = Index2(maxX, minY);
+                Index2 p3 = Index2(minX, maxY);
+                Index2 p4 = Index2(maxX, maxY);
+
+                Vector2 delta = pointBefIndex - min;
+                float alpha = delta.x;
+                float beta = delta.y;
+                Vector3 a = ink2[p1] * (1.0f - alpha) + ink2[p2] * alpha;
+                Vector3 b = ink2[p3] * (1.0f - alpha) + ink2[p4] * alpha;
+                Vector3 c = a * (1.0f - beta) + b * beta;
+
+                ink2[point] = c;
+            }
+        }
+    }
+
+    // velocity advection
+    if (Scene::testcase >= Scene::SMOKE) {
+        const Index2 &Inksize = this->inkRGB.getSize();
+        Array2<float> horizontalV(velocityX.getSize());
+        Array2<float> verticalV(velocityY.getSize());
+        Index2 faceSizeX = grid.getSizeFacesX();
+        Index2 faceSizeY = grid.getSizeFacesY();
+
+        for (int i = 0; i < faceSizeX.x; i++) {
+            for (int j = 0; j < faceSizeX.y; j++) {
+                Index2 point(i, j);
+                Vector2 pointD = this->grid.getFacePosX(point);
+
+                float v = check(point, velocityX);
+
+                float fi = check(point, velocityY);
+                float gi = check(Index2(point.x - 1, point.y), velocityY);
+                float psi = check(Index2(point.x, point.y + 1), velocityY);
+                float omega = check(Index2(point.x - 1, point.y + 1), velocityY);
+                float u = (((gi + fi) * 0.5f) + ((omega + psi) * 0.5f)) * 0.5f;
+
+                Vector2 vel(v, u);
+
+                Vector2 pointBef = pointD - dt * vel;
+
+                if (pointBef.x < dmin.x)
+                    pointBef.x = dmin.x;
+                else if (pointBef.x > dmax.x)
+                    pointBef.x = dmax.x;
+
+                if (pointBef.y < dmin.y)
+                    pointBef.y = dmin.y;
+                else if (pointBef.y > dmax.y)
+                    pointBef.y = dmax.y;
+
+                Vector2 faceIndexX = grid.getFaceIndex(pointBef, 0);
+
+                Vector2 min = Vector2(floor(faceIndexX.x), floor(faceIndexX.y));
+                Index2 minID(min.x, min.y);
+                Vector2 max = Vector2(ceil(faceIndexX.x), ceil(faceIndexX.y));
+                Index2 maxID(max.x, max.y);
+
+                int minX = clamp(minID.x, 0, Inksize.x - 1);
+                int maxX = clamp(maxID.x, 0, Inksize.x - 1);
+                int minY = clamp(minID.y, 0, Inksize.y - 1);
+                int maxY = clamp(maxID.y, 0, Inksize.y - 1);
+
+                Index2 p1 = Index2(minX, minY);
+                Index2 p2 = Index2(maxX, minY);
+                Index2 p3 = Index2(minX, maxY);
+                Index2 p4 = Index2(maxX, maxY);
+
+                Vector2 delta = faceIndexX - min;
+                float alpha = delta.x;
+                float beta = delta.y;
+                float a = velocityX[p1] * (1.0f - alpha) + velocityX[p2] * alpha;
+                float b = velocityX[p3] * (1.0f - alpha) + velocityX[p4] * alpha;
+                float c = a * (1.0f - beta) + b * beta;
+
+                Index2 sz = horizontalV.getSize();
+                if (point.x > 0 && point.x < sz.x - 1 && point.y >= 0 && point.y < sz.y) {
+                    horizontalV[point] = c;
+                }
+            }
+        }
+
+        for (int i = 0; i < faceSizeY.x; i++) {
+            for (int j = 0; j < faceSizeY.y; j++) {
+                Index2 point(i, j);
+                Vector2 pointD = this->grid.getFacePosY(point);
+
+                float fi = check(point, velocityX);
+                float gi = check(Index2(point.x + 1, point.y), velocityX);
+                float psi = check(Index2(point.x, point.y - 1), velocityX);
+                float omega = check(Index2(point.x + 1, point.y - 1), velocityX);
+                float v = (((gi + fi) * 0.5f) + ((omega + psi) * 0.5f)) * 0.5f;
+
+                float u = check(point, velocityY);
+                Vector2 vel(v, u);
+
+                Vector2 pointBef = pointD - dt * vel;
+
+                if (pointBef.x < dmin.x)
+                    pointBef.x = dmin.x;
+                else if (pointBef.x > dmax.x)
+                    pointBef.x = dmax.x;
+
+                if (pointBef.y < dmin.y)
+                    pointBef.y = dmin.y;
+                else if (pointBef.y > dmax.y)
+                    pointBef.y = dmax.y;
+
+                Vector2 faceIndexY = grid.getFaceIndex(pointBef, 1);
+
+                Vector2 min = Vector2(floor(faceIndexY.x), floor(faceIndexY.y));
+                Index2 minID(min.x, min.y);
+                Vector2 max = Vector2(ceil(faceIndexY.x), ceil(faceIndexY.y));
+                Index2 maxID(max.x, max.y);
+
+                int minX = clamp(minID.x, 0, Inksize.x - 1);
+                int maxX = clamp(maxID.x, 0, Inksize.x - 1);
+                int minY = clamp(minID.y, 0, Inksize.y - 1);
+                int maxY = clamp(maxID.y, 0, Inksize.y - 1);
+
+                Index2 p1 = Index2(minX, minY);
+                Index2 p2 = Index2(maxX, minY);
+                Index2 p3 = Index2(minX, maxY);
+                Index2 p4 = Index2(maxX, maxY);
+
+                Vector2 delta = faceIndexY - min;
+                float alpha = delta.x;
+                float beta = delta.y;
+                float a = velocityY[p1] * (1.0f - alpha) + velocityY[p2] * alpha;
+                float b = velocityY[p3] * (1.0f - alpha) + velocityY[p4] * alpha;
+                float c = a * (1.0f - beta) + b * beta;
+
+                Index2 sz = verticalV.getSize();
+                if (point.x >= 0 && point.x < sz.x && point.y > 0 && point.y < sz.y - 1) {
+                    verticalV[point] = c;
+                }
+            }
+        }
+        velocityX = horizontalV;
+        velocityY = verticalV;
+    */
+
+    
     // La idea del algoritmo de adveccion
     // 1. Calcular posicion donde se situa la propiedad a calcular (velocidad o tinta) en el paso anterior. 
     // Para ello, calcular la velocidad en el punto actual y aplicarla de manera inversa a la posicion.
@@ -81,12 +272,12 @@ void Fluid2::fluidAdvection(const float dt)
             Vector2 ijPrev = this->grid.getCellIndex(xPrev);
 
             // se clampean las posiciones para que no se salgan del dominio de la rejilla
-            ijPrev.x = std::max(0.f, std::min(ijPrev.x, (float)Scene::nCellsX - 1));
-            ijPrev.y = std::max(0.f, std::min(ijPrev.y, (float)Scene::nCellsY - 1));
+            ijPrev.x = std::max(0.f, std::min(ijPrev.x, (float)Scene::nCellsX - 1.001f));
+            ijPrev.y = std::max(0.f, std::min(ijPrev.y, (float)Scene::nCellsY - 1.001f));
 
             Vector3 ink = bilinearInt_Vector3(inkRGBCopy, ijPrev);
             this->inkRGB[Index2(i, j)] = ink;
-        }
+            }
     }
 
     // Velocity advection term HERE
@@ -100,18 +291,19 @@ void Fluid2::fluidAdvection(const float dt)
             // ese valor de la velocidad x ya lo tenemos porque es ahi donde se guarda. pero la velocidad en y
             // se guarda en las caras inferiores de la rejilla. hay que interpolar con los valores de la
             // velocidad en Y de: la celda actual, la celda izda, la celda superior y la celda izda superior.
-            float vx = velXCopy[i, j];
-            float vy_left = (i == 0) ? 0.f : velYCopy[i - 1, j];
-            float vy_leftup = (i == 0 || j > facesX_size.y) ? 0.f : velYCopy[i - 1, j + 1];
-            float vy_up = (j > facesX_size.y) ? 0.f : velYCopy[i, j + 1];
-            float vy = (vy_left + velYCopy[i, j] + vy_leftup + vy_up) * 0.25f;
+            float vx        = velXCopy[Index2(i, j)];
+            float vy_left   = (i == 0) ? 0.f : velYCopy[Index2(i - 1, j)];
+            float vy_center = (i == facesX_size.x - 1) ? 0.f : velYCopy[Index2(i, j)]; // vy tiene facesX_size.x - 1 elementos
+            float vy_leftup = (i == 0) ? 0.f : velYCopy[Index2(i - 1, j + 1)];
+            float vy_up     = (i == facesX_size.x -1) ? 0.f : velYCopy[Index2(i, j + 1)];
+            float vy        = (vy_left + vy_center + vy_leftup + vy_up) * 0.25f;
             Vector2 v(vx, vy);
 
             Vector2 xPrev = x - v * dt;
             Vector2 ijPrev = this->grid.getFaceIndexX(xPrev);
 
-            ijPrev.x = std::max(0.f, std::min(ijPrev.x, (float)Scene::nCellsX));
-            ijPrev.y = std::max(0.f, std::min(ijPrev.y, (float)Scene::nCellsY - 1));
+            ijPrev.x = std::max(0.f, std::min(ijPrev.x, (float)facesX_size.x - 1.001f));
+            ijPrev.y = std::max(0.f, std::min(ijPrev.y, (float)facesX_size.y - 1.001f));
 
             float new_vx = bilinearInt_float(velXCopy, ijPrev);
             this->velocityX[Index2(i, j)] = new_vx;
@@ -124,18 +316,19 @@ void Fluid2::fluidAdvection(const float dt)
             Index2 ij(i, j);
             Vector2 x = this->grid.getFacePosY(ij);
 
-            float vx_down = (j == 0) ? 0.f : velXCopy[i, j - 1];
-            float vx_downright = (i > facesX_size.x || j == 0) ? 0.f : velXCopy[i + 1, j - 1];
-            float vx_right = (i > facesX_size.x) ? 0.f : velXCopy[i + 1, j];
-            float vx = (vx_down + velXCopy[i, j] + vx_downright + vx_right) * 0.25f;
-            float vy = velYCopy[i, j];
+            float vx_down       = (j == 0) ? 0.f : velXCopy[Index2(i, j - 1)];
+            float vx_center     = (j == facesY_size.y - 1) ? 0.f : velXCopy[Index2(i, j)];
+            float vx_downright  = (j == 0) ? 0.f : velXCopy[Index2(i + 1, j - 1)];
+            float vx_right      = (j == facesY_size.y - 1) ? 0.f : velXCopy[Index2(i + 1, j)];
+            float vx            = (vx_down + vx_center + vx_downright + vx_right) * 0.25f;
+            float vy            = velYCopy[Index2(i, j)];
             Vector2 v(vx, vy);
 
             Vector2 xPrev = x - v * dt;
             Vector2 ijPrev = this->grid.getFaceIndexY(xPrev);
 
-            ijPrev.x = std::max(0.f, std::min(ijPrev.x, (float)Scene::nCellsX - 1));
-            ijPrev.y = std::max(0.f, std::min(ijPrev.y, (float)Scene::nCellsY));
+            ijPrev.x = std::max(0.f, std::min(ijPrev.x, (float)facesY_size.x - 1.001f));
+            ijPrev.y = std::max(0.f, std::min(ijPrev.y, (float)facesY_size.y - 1.001f));
 
             float velY = bilinearInt_float(velYCopy, ijPrev);
             this->velocityY[Index2(i, j)] = velY;
@@ -164,16 +357,26 @@ void Fluid2::fluidEmission()
                 this->velocityY[idx] = vel;
             }
         }*/ 
-        for (int i = 1; i <= 3; i++) {
-            Index2 idx(i, 1);
-            Vector3 ink;
-            if (i == 1) ink = Vector3(1,0,0);
-            if (i == 2) ink = Vector3(0,1,0);
-            if (i == 3) ink = Vector3(0,0,1);
-            this->inkRGB[idx] = ink;
-            this->velocityY[idx] = 1;
+        
+        // dimension de cada cuadrado de color = tamaño de la rejilla / 10
+        float emit_width = Scene::nCellsX / 10;
+        float emit_height = Scene::nCellsY / 10;
+        float emit_center = Scene::nCellsX / 2;
 
-        }
+        float init_cell_x = emit_center - (emit_width * 1.5);
+        
+        for (int j = 1; j <= emit_height; j++) {  // para cada fila, de abajo a arriba de la rejilla
+            for (int i = init_cell_x; i <= emit_center + (emit_width * 1.5); i++) {
+                if (i < init_cell_x + emit_width)
+                    this->inkRGB[Index2(i,j)] = Vector3(1, 0, 0);
+                else if (i < init_cell_x + emit_width * 2)
+                    this->inkRGB[Index2(i, j)] = Vector3(0, 1, 0);
+                else
+                    this->inkRGB[Index2(i, j)] = Vector3(0, 0, 1);
+
+                this->velocityY[Index2(i,j)] = 8;
+            }
+        }  
     }
 }
 
@@ -186,8 +389,10 @@ void Fluid2::fluidVolumeForces(const float dt)
         // Resolver expl�citamente con g = Scene::kGravity
         // Si nos ponemos creativos, se puede hacer similar a los emisores: a�adir dominios de viento...
 
-        for (uint i = 0; i < Scene::nCellsX; i++) {
-            for (uint j = 0; j < Scene::nCellsY; j++) {
+        Index2 faceSizeY = grid.getSizeFacesY();
+
+        for (uint i = 0; i < faceSizeY.x; i++) {
+            for (uint j = 0; j < faceSizeY.y; j++) {
                 this->velocityY[Index2(i, j)] += Scene::kGravity * dt;
             }
         }
@@ -196,7 +401,70 @@ void Fluid2::fluidVolumeForces(const float dt)
 
 void Fluid2::fluidViscosity(const float dt)
 {
-    if (Scene::testcase >= Scene::SMOKE) {
+    /* if (Scene::testcase >= Scene::SMOKE) {
+        Vector2 cellDx = this->getGrid().getDx();
+
+        Index2 faceSizeX = grid.getSizeFacesX();
+        Index2 faceSizeY = grid.getSizeFacesY();
+
+        Array2<float> horizontalV(velocityX.getSize());
+        float density = Scene::kDensity;
+        float viscosity = Scene::kViscosity;
+        for (int i = 0; i < faceSizeX.x; i++) {
+            for (int j = 0; j < faceSizeX.y; j++) {
+                Index2 p(i, j);
+
+                //	(i,j)
+                float V_ij = check(p, velocityX);
+                //	(i+1,j)
+                float V_right = check(Index2(p.x + 1, p.y), velocityX);
+                //	(i-1,j)
+                float V_left = check(Index2(p.x - 1, p.y), velocityX);
+                //	(i,j+1)
+                float V_up = check(Index2(p.x, p.y + 1), velocityX);
+                //	(i,j-1)
+                float V_down = check(Index2(p.x, p.y - 1), velocityX);
+
+                float value = V_ij + (dt / density) * viscosity *
+                                         (((V_right - 2.0f * V_ij + V_left) / (cellDx.x * cellDx.x)) +
+                                          ((V_up - 2.0f * V_ij + V_down) / (cellDx.y * cellDx.y)));
+
+                Index2 sz = horizontalV.getSize();
+                if (p.x > 0 && p.x < sz.x - 1 && p.y >= 0 && p.y < sz.y) {
+                    horizontalV[p] = value;
+                }
+            }
+        }
+
+        Array2<float> verticalV(velocityY.getSize());
+        for (int i = 0; i < faceSizeY.x; i++) {
+            for (int j = 0; j < faceSizeY.y; j++) {
+                Index2 p(i, j);
+
+                //	(i,j)
+                float V_ij = check(p, velocityY);
+                //	(i+1,j)
+                float V_right = check(Index2(p.x + 1, p.y), velocityY);
+                //	(i-1,j)
+                float V_left = check(Index2(p.x - 1, p.y), velocityY);
+                //	(i,j+1)
+                float V_up = check(Index2(p.x, p.y + 1), velocityY);
+                //	(i,j-1)
+                float V_down = check(Index2(p.x, p.y - 1), velocityY);
+
+                float value = V_ij + (dt / density) * viscosity *
+                                         (((V_right - 2.0f * V_ij + V_left) / (cellDx.x * cellDx.x)) +
+                                          ((V_up - 2.0f * V_ij + V_down) / (cellDx.y * cellDx.y)));
+
+                Index2 sz = verticalV.getSize();
+                if (p.x >= 0 && p.x < sz.x && p.y > 0 && p.y < sz.y - 1) {
+                    verticalV[p] = value;
+                }
+            }
+        }
+        velocityX = horizontalV;
+        velocityY = verticalV;*/
+
         // Viscosity term HERE
 
         // se resuelve la formula del termino viscoso de navier-strokes con una aproximacion explicita por diferencias finitas
@@ -216,70 +484,167 @@ void Fluid2::fluidViscosity(const float dt)
         float kX = (dt * Scene::kViscosity / Scene::kDensity) / (deltaX * deltaX);
         float kY = (dt * Scene::kViscosity / Scene::kDensity) / (deltaY * deltaY);
 
-        for (uint i = 0; i <= Nx; i++) {
-            for (uint j = 0; j <= Ny; j++) {
+        Index2 facesX_size = this->grid.getSizeFacesX();
+        Index2 facesY_size = this->grid.getSizeFacesY();
+
+        for (uint i = 1; i < facesX_size.x; i++) {
+            for (uint j = 0; j < facesX_size.y; j++) {
 
                 float vx = velX_read[Index2(i, j)];
-                float vy = velY_read[Index2(i, j)];
                 // left
-                Index2 idx_left = (i > 0) ? Index2(i - 1, j) : Index2(i, j);
-                float vx_left = velX_read[idx_left];
-                float vy_left = velY_read[idx_left];
+                float vx_left = velX_read[Index2(i - 1, j)];
                 // right
-                Index2 idx_right = (i <= Nx) ? Index2(i + 1, j) : Index2(i, j);
-                float vx_right = velX_read[idx_right];
-                float vy_right = velY_read[idx_right];
-                // up
-                Index2 idx_down = (j > 0) ? Index2(i, j - 1) : Index2(i, j);
-                float vx_down = velX_read[idx_down];
-                float vy_down = velY_read[idx_down];
+                float vx_right = velX_read[Index2(i + 1, j)];
                 // down
-                Index2 idx_up = (j <= Ny) ? Index2(i, j + 1) : Index2(i, j);
-                float vx_up = velX_read[idx_up];
-                float vy_up = velY_read[idx_up];
+                float vx_down = (j > 0) ? velX_read[Index2(i, j - 1)] : vx;
+                // up
+                float vx_up = (j < facesX_size.y) ? velX_read[Index2(i, j + 1)] : vx;
 
                 float vx_new = kX * (vx_right - 2 * vx + vx_left) + kY * (vx_up - 2 * vx + vx_down);
-                float vy_new = kX * (vy_right - 2 * vy + vy_left) + kY * (vy_up - 2 * vy + vy_down);
                 
                 if (i < Nx - 1 && j > 0 && j < Ny) {
                     velX_write[Index2(i, j)] += vx_new;
+                }
+            }
+        }
+
+        for (uint i = 0; i <= facesY_size.x; i++) {
+            for (uint j = 0; j <= facesY_size.y; j++) {
+                float vy = velY_read[Index2(i, j)];
+                // down
+                Index2 idx_left = (i > 0) ? Index2(i - 1, j) : Index2(i, j);
+                float vy_left = velY_read[idx_left];
+                // up
+                Index2 idx_right = (i < facesY_size.x) ? Index2(i + 1, j) : Index2(i, j);
+                float vy_right = velY_read[idx_right];
+                // left
+                Index2 idx_down = (j > 0) ? Index2(i, j - 1) : Index2(i, j);
+                float vy_down = velY_read[idx_down];
+                // right
+                Index2 idx_up = (j < facesY_size.y) ? Index2(i, j + 1) : Index2(i, j);
+                float vy_up = velY_read[idx_up];
+
+                float vy_new = kX * (vy_right - 2 * vy + vy_left) + kY * (vy_up - 2 * vy + vy_down);
+
+                if (i < Nx - 1 && j > 0 && j < Ny) {
                     velY_write[Index2(i, j)] += vy_new;
                 }
             }
         }
 
-        /*for (uint i = 0; i <= Nx; i++) {
-            for (uint j = 0; j <= Ny; j++) {
-                float vel = velYOld[i, j];
-                // left
-                Index2 idx_left = (i > 0) ? Index2(i - 1, j) : Index2(i, j);
-                float vel_left = velYOld[idx_left];
-                // right
-                Index2 idx_right = (i < Nx - 1) ? Index2(i + 1, j) : Index2(i, j);
-                float vel_right = velYOld[idx_right];
-                // up
-                Index2 idx_down = (j > 0) ? Index2(i, j - 1) : Index2(i, j);
-                float vel_down = velYOld[idx_down];
-                // down
-                Index2 idx_up = (j < Ny) ? Index2(i, j + 1) : Index2(i, j);
-                float vel_up = velYOld[idx_up];
-
-                float new_vel = kX * (vel_right - 2 * vel + vel_left) + kY * (vel_up - 2 * vel + vel_down);
-
-                if (i >= 0 && i < Nx && j > 0 && j < Ny) {
-                    velY[i, j] += new_vel;
-                }
-            }
-        }*/
-
         this->velocityX = velX_write;
         this->velocityY = velY_write;
-    }
 }
 
 void Fluid2::fluidPressureProjection(const float dt)
 {
     if (Scene::testcase >= Scene::SMOKE) {
+        // pressure
+        /* float density = Scene::kDensity;
+        double res;
+        int volt;
+
+        Index2 gridSize = grid.getSize();
+        SparseMatrix<double> A(gridSize.x * gridSize.y, 5);
+
+        const Index2 &size_v = velocityY.getSize();
+        for (int i = 0; i < size_v.x; i++)
+            velocityY[Index2(i, 0)] = 0.0f;
+
+        std::vector<double> den;
+        den.resize(gridSize.x * gridSize.y);
+        std::vector<double> b(gridSize.x * gridSize.y);
+
+        PCGSolver<double> solver;
+        solver.set_solver_parameters(1e-2, 1000);
+
+        Vector2 cellDx = this->getGrid().getDx();
+
+        for (int i = 0; i < gridSize.x; i++) {
+            for (int j = 0; j < gridSize.y; j++) {
+                float elementX = 2.0f / (cellDx.x * cellDx.x);
+                float elementY = 2.0f / (cellDx.y * cellDx.y);
+                if (i == 0 || i == gridSize.x - 1)
+                    elementX = 1.0f / (cellDx.x * cellDx.x);
+                if (j == 0)
+                    elementY = 1.0f / (cellDx.y * cellDx.y);
+
+                int linearID = pressure.getLinearIndex(i, j);
+                Index2 point_ij(i, j);
+                A.set_element(linearID, linearID, elementX + elementY);
+
+                if (j == gridSize.y - 1)
+                    A.set_element(linearID, linearID, elementX + elementY);
+
+                Index2 P_left(i - 1, j);
+                if (P_left.x < gridSize.x)
+                    A.set_element(
+                        linearID, pressure.getLinearIndex(P_left.x, P_left.y), (-1.0f / (cellDx.x * cellDx.x)));
+                Index2 P_right(i + 1, j);
+                if (P_right.x < gridSize.x)
+                    A.set_element(
+                        linearID, pressure.getLinearIndex(P_right.x, P_right.y), (-1.0f / (cellDx.x * cellDx.x)));
+                Index2 P_down(i, j - 1);
+                if (P_down.y < gridSize.y)
+                    A.set_element(
+                        linearID, pressure.getLinearIndex(P_down.x, P_down.y), (-1.0f / (cellDx.y * cellDx.y)));
+                Index2 P_up(i, j + 1);
+                if (P_up.y < gridSize.y)
+                    A.set_element(linearID, pressure.getLinearIndex(P_up.x, P_up.y), (-1.0f / (cellDx.y * cellDx.y)));
+
+                float v_x = check(point_ij, velocityX);
+                float v_y = check(point_ij, velocityY);
+                float v_right = check(P_right, velocityX);
+                float v_up = check(P_up, velocityY);
+
+                float deltaVx = (v_right - v_x) / cellDx.x;
+                float deltaVy = (v_up - v_y) / cellDx.y;
+                float denValue = (-density / dt) * (deltaVx + deltaVy);
+
+                den[linearID] = denValue;
+            }
+        }
+
+        solver.solve(A, den, b, res, volt);
+
+        for (int i = 0; i < gridSize.x; i++) {
+            for (int j = 0; j < gridSize.y; j++) {
+                int upd = pressure.getLinearIndex(i, j);
+                pressure[Index2(i, j)] = b[upd];
+            }
+        }
+
+        Array2<float> velX(velocityX.getSize());
+        Array2<float> velY(velocityY.getSize());
+        for (int i = 0; i < gridSize.x; i++) {
+            for (int j = 0; j < gridSize.y; j++) {
+                Index2 p(i, j);
+
+                float ro = check(p, pressure);
+
+                Index2 horizontal = Index2(p.x + 1, p.y);
+                float horizontalV = check(horizontal, velocityX);
+                float horizontalP = check(horizontal, pressure);
+                float calcX = horizontalV - (dt / density) * (horizontalP - ro) / cellDx.x;
+
+                Index2 szX = velX.getSize();
+                if (horizontal.x >= 0 && horizontal.x < szX.x && horizontal.y >= 0 && horizontal.y < szX.y)
+                    velX[horizontal] = calcX;
+
+                Index2 vertical = Index2(p.x, p.y + 1);
+                float verticalV = check(vertical, velocityY);
+                float verticalP = check(vertical, pressure);
+                float calcY = verticalV - (dt / density) * (verticalP - ro) / cellDx.y;
+
+                Index2 szY = velY.getSize();
+                if (vertical.x >= 0 && vertical.x < szY.x && vertical.y >= 0 && vertical.y < szY.y)
+                    velY[vertical] = calcY;
+            }
+        }
+        velocityX = velX;
+        velocityY = velY;*/
+
+
 
         // Incompressibility / Pressure term HERE
         int Nx = Scene::nCellsX;
@@ -288,7 +653,7 @@ void Fluid2::fluidPressureProjection(const float dt)
         Array2<float> vy = this->velocityY;
         // se asume que dx = dy
         float dx = this->getGrid().getDx().x;
-        float K = -Scene::kDensity / dt;
+        float K = -Scene::kDensity / (dt * dx);
 
         // Condiciones de contorno: Set velocity components in all boundaries to 0
         // Foreach Y (row) make vX0 (first column), vXN(last column) = 0
@@ -314,11 +679,18 @@ void Fluid2::fluidPressureProjection(const float dt)
         // RHS (vector b del sistema de ecuaciones) -> divergencia del campo de velocidades
         std::vector<double> rhs(Nx * Ny, 0.0);
         // Matriz A -> laplaciano de la presion
-        SparseMatrix<double> A(Nx * Ny);
+        SparseMatrix<double> A(Nx * Ny, 5);
         // incognita = presiones
         std::vector<double> p(Nx * Ny, 0.0);
 
+        for (int i = 0; i < Nx; i++) {
+    for (int j = 0; j < Ny; j++) {
+        p[i * Ny + j] = (double)this->pressure[Index2(i, j)];
+    }
+}
+
         // Rellenar matriz A y RHS
+        float dxdx = dx * dx;
         A.zero();
         for (int i = 0; i < Nx; i++) {
             for (int j = 0; j < Ny; j++) {
@@ -342,24 +714,24 @@ void Fluid2::fluidPressureProjection(const float dt)
                 // use add_to_element, set_element
 
                 int neighbors = 0;
-                if (i > 0) {
-                    A.set_element(idx, (i - 1) * Ny + j, -1.0);
+                if (i > 0) { // vecino abajo
+                    A.set_element(idx, (i - 1) * Ny + j, -1.0/ (dx * dx));
                     neighbors++;
                 }
-                if (i < Nx - 1) {
-                    A.set_element(idx, (i + 1) * Ny + j, -1.0);
+                if (i < Nx - 1) { // vecino arriba
+                    A.set_element(idx, (i + 1) * Ny + j, -1.0 / (dx * dx));
                     neighbors++;
                 }
-                if (j > 0) {
-                    A.set_element(idx, i * Ny + (j - 1), -1.0);
+                if (j > 0) { // vecino izda
+                    A.set_element(idx, i * Ny + (j - 1), -1.0 / (dx * dx));
                     neighbors++;
                 }
-                if (j < Ny - 1) {
-                    A.set_element(idx, i * Ny + (j + 1), -1.0);
+                if (j < Ny - 1) { // vecino dcha
+                    A.set_element(idx, i * Ny + (j + 1), -1.0 / (dx * dx));
                     neighbors++;
                 }
 
-                A.set_element(idx, idx, (double)neighbors);
+                A.set_element(idx, idx, (double)neighbors / (dx * dx));
             }
         }
 
@@ -371,10 +743,19 @@ void Fluid2::fluidPressureProjection(const float dt)
         int iters_out = 0;
         solver.solve(A, rhs, p, residual_out, iters_out);
 
+        std::cout << "Iteraciones realizadas: " << iters_out << std::endl;
+
+        // Se debe calcular la media de las presiones, para asegurar que las presiones estén siempre centradas en 0 y estabilizar el sistema
+        double sum_p = 0.0;
+        for (int i = 0; i < Nx * Ny; i++) {
+            sum_p += p[i];
+        }
+        double mean_p = sum_p / (double)(Nx * Ny);
+
         // Aplicar las P a la rejilla -> pasar todos los valores a Array2 pressure (definido en Fluid2.h)
         for (int i = 0; i < Nx; i++)
             for (int j = 0; j < Ny; j++)
-                this->pressure[Index2(i, j)] = (float)p[i * Ny + j];
+                this->pressure[Index2(i, j)] = (float)(p[i * Ny + j] - mean_p);
 
         // Aplicar últimas fórmulas del pdf -> actualizar todas las velocidades del sistema con las presiones
         float p_K = dt / (Scene::kDensity * dx);

@@ -1,7 +1,8 @@
 {
   "ExpandedNodes": [
     "",
-    "\\src"
+    "\\src",
+    "\\src\\Numeric"
   ],
   "SelectedNode": "\\src\\Fluid2Exercise.cpp",
   "PreviewInSolutionExplorer": false
